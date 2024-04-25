@@ -1,0 +1,10 @@
+# command to set the wallpaper
+set_command = "swww img {path}"
+# Either an array of values or a string
+aspect_ratios = ["16:9"]
+
+# A group, aka a section of configs
+[[categories]]
+name = "ruby"
+# Tags for the group
+tags = ["Ruby Rose (RWBY)"]

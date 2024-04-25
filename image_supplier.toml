@@ -1,0 +1,22 @@
+base_url = "https://wallhaven.cc/api/v1/search"
+
+[response]
+format = "json"
+id = { type = "key", key = "id" }
+location = { type = "array", key = "data" }
+image_url_key = "path"
+image_type = { type = "key", key = "file_type" }
+# Could also be { type = "path" }, which means it gets decoded from the url path
+
+[tags]
+query = "q"
+prefix = "+"
+seperator = ""
+
+[aspect_ratio]
+query = "ratios"
+seperator = ","
+
+[sort]
+query = "sorting"
+value = "random"
