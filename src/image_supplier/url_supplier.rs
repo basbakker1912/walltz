@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, bail};
 use image::ImageFormat;
+use rand::Rng;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -102,8 +103,6 @@ impl UrlSupplier {
             .send()
             .await?;
 
-        println!("Quering image url from: {}", result.url().to_string());
-
         let response_data = match self.response.format {
             ResponseFormat::Json => {
                 let response: HashMap<String, serde_json::Value> =
@@ -132,15 +131,15 @@ impl UrlSupplier {
 
                 if let serde_json::Value::Object(object) = entry {
                     let image_id = match self.response.id {
-                        ImageId::Random => todo!(),
+                        ImageId::Random => rand::thread_rng().gen::<u32>().to_string(),
                         ImageId::Key { key } => {
                             let image_id = object
                                 .get(&key)
                                 .ok_or(anyhow!("No value for key: {}", key))?;
 
                             match image_id {
-                                Value::String(value) => value,
-                                Value::Number(value) => &value.to_string(),
+                                Value::String(value) => value.clone(),
+                                Value::Number(value) => value.to_string(),
                                 _ => bail!(
                                     "Key for id: {} not of type: String or Number, but of type: {:?}",
                                     key,
@@ -156,7 +155,7 @@ impl UrlSupplier {
                             .ok_or(anyhow!("No value for key: {}", self.response.image_url_key))?;
 
                         if let serde_json::Value::String(value) = image_url {
-                            value
+                            value.clone()
                         } else {
                             bail!(
                                 "Key for image url: {} not of type: String, but of type: {:?}",
@@ -166,15 +165,18 @@ impl UrlSupplier {
                         }
                     };
 
-                    let image_type = match self.response.image_type {
-                        ImageTypeDecodeMethod::Path => todo!(),
+                    let image_format = match self.response.image_type {
+                        ImageTypeDecodeMethod::Path => ImageFormat::from_path(&image_url)?,
                         ImageTypeDecodeMethod::Key { key } => {
                             let image_type = object
                                 .get(&key)
                                 .ok_or(anyhow!("No value for key: {}", key))?;
 
                             if let serde_json::Value::String(value) = image_type {
-                                value
+                                ImageFormat::from_mime_type(value).ok_or(anyhow!(
+                                    "No valid file format for mime type: {}",
+                                    image_type
+                                ))?
                             } else {
                                 bail!(
                                     "Key for image type: {} not of type: String, but of type: {:?}",
@@ -185,14 +187,9 @@ impl UrlSupplier {
                         }
                     };
 
-                    let image_format = ImageFormat::from_mime_type(image_type).ok_or(anyhow!(
-                        "No valid file format for mime type: {}",
-                        image_type
-                    ))?;
-
                     ImageUrlObject {
-                        id: image_id.clone(),
-                        url: image_url.clone(),
+                        id: image_id,
+                        url: image_url,
                         image_format,
                     }
                 } else {

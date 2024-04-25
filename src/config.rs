@@ -1,4 +1,8 @@
-use std::{collections::HashMap, io::Read};
+use std::{
+    collections::HashMap,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 use xdg::BaseDirectories;
@@ -9,19 +13,31 @@ use crate::BASEDIRECTORIES;
 pub struct CategoryConfig {
     pub name: String,
     pub tags: Vec<String>,
+    pub aspect_ratios: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct SupplierFile {
+    pub name: String,
+    pub file: String,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct GlobalConfig {
     pub set_command: Option<String>,
-    pub aspect_ratios: Option<Vec<String>>,
     #[serde(default)]
     pub categories: Vec<CategoryConfig>,
+    #[serde(default)]
+    pub suppliers: Vec<SupplierFile>,
 }
 
 impl GlobalConfig {
+    pub fn get_config_path() -> PathBuf {
+        BASEDIRECTORIES.get_config_home()
+    }
+
     pub fn read() -> anyhow::Result<Self> {
-        let config_path = BASEDIRECTORIES.place_config_file("config.toml").unwrap();
+        let config_path = BASEDIRECTORIES.place_config_file("config.toml")?;
 
         let settings = std::fs::File::open(config_path);
 

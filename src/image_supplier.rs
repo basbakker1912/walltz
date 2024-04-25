@@ -4,14 +4,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use bytes::Bytes;
-use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, ImageDecoder, ImageFormat};
 
 mod url_supplier;
 
 pub use url_supplier::UrlSupplier;
 use xdg::BaseDirectories;
+
+use crate::BASEDIRECTORIES;
 
 pub struct SearchParameters {
     pub tags: Vec<String>,
@@ -25,6 +27,28 @@ pub struct WallpaperImage {
 }
 
 impl WallpaperImage {
+    /// Unlike save, this encodes the image correctly. SLOW
+    pub fn save_to_format(&self, path: &Path) -> anyhow::Result<()> {
+        if self
+            .format
+            .extensions_str()
+            .first()
+            .is_some_and(|ext| path.ends_with(ext))
+        {
+            self.save(path)?;
+
+            return Ok(());
+        }
+
+        let reader = image::io::Reader::with_format(Cursor::new(self.bytes.clone()), self.format);
+        let image = reader.decode()?;
+
+        image.save(path)?;
+
+        Ok(())
+    }
+
+    /// Just saves the file in it's pred
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         let image_data = self.bytes.as_ref();
         std::fs::write(path, image_data)?;
@@ -32,8 +56,8 @@ impl WallpaperImage {
         Ok(())
     }
 
-    pub fn cache(&self, basedirs: &BaseDirectories) -> anyhow::Result<PathBuf> {
-        let cache_dir = basedirs.get_cache_home();
+    pub fn cache(&self) -> anyhow::Result<PathBuf> {
+        let cache_dir = BASEDIRECTORIES.get_cache_home();
         std::fs::create_dir_all(&cache_dir)?;
         let file_name = {
             let extension = self
