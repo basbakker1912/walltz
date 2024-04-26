@@ -1,10 +1,3 @@
-use std::{process::ExitCode, vec};
-
-use clap::Parser;
-use image_supplier::{ImageSupplier, WallpaperImage};
-
-use crate::image_supplier::SearchParameters;
-
 mod cli;
 pub mod config;
 pub mod image_supplier;

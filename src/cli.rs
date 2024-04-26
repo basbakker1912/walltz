@@ -1,16 +1,6 @@
-use std::{fs, io::Read, path::PathBuf, process::ExitCode, time::Duration, vec};
+use std::process::ExitCode;
 
-use anyhow::{anyhow, bail};
-use clap::{Args, Parser, Subcommand};
-use indicatif::{ProgressBar, ProgressStyle};
-use rand::seq::SliceRandom;
-use tracing_subscriber::fmt::format;
-use xdg::BaseDirectories;
-
-use crate::{
-    config::{CategoryConfig, GlobalConfig},
-    image_supplier::{ImageSupplier, SearchParameters, UrlSupplier},
-};
+use clap::Parser;
 
 mod fetch;
 

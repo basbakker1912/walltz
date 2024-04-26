@@ -1,11 +1,6 @@
-use std::{
-    collections::HashMap,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{io::Read, path::PathBuf};
 
 use serde::Deserialize;
-use xdg::BaseDirectories;
 
 use crate::BASEDIRECTORIES;
 

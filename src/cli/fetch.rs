@@ -1,13 +1,13 @@
-use std::{fs, io::Read, path::PathBuf, process::ExitCode, time::Duration, vec};
+use std::{fs, io::Read, path::PathBuf, time::Duration, vec};
 
 use anyhow::{anyhow, bail};
-use clap::{Args, Parser, Subcommand};
-use indicatif::{ProgressBar, ProgressStyle};
+use clap::Args;
+use indicatif::ProgressBar;
 use rand::seq::SliceRandom;
 
 use crate::{
-    config::{CategoryConfig, GlobalConfig},
-    image_supplier::{ImageSupplier, SearchParameters, UrlSupplier},
+    config::GlobalConfig,
+    image_supplier::{ImageSupplier, SearchParameters},
 };
 
 #[derive(Args, Clone, Debug)]

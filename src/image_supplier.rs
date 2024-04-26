@@ -1,17 +1,15 @@
 use std::{
-    fs::File,
-    io::{self, BufReader, Cursor, Write},
+    io::Cursor,
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use bytes::Bytes;
-use image::{DynamicImage, ImageDecoder, ImageFormat};
+use image::ImageFormat;
 
 mod url_supplier;
 
 pub use url_supplier::UrlSupplier;
-use xdg::BaseDirectories;
 
 use crate::BASEDIRECTORIES;
 

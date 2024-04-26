@@ -41,10 +41,7 @@
 
 use std::process::ExitCode;
 
-use wallpaper_manager::{
-    image_supplier::{SearchParameters, UrlSupplier},
-    Program,
-};
+use wallpaper_manager::Program;
 
 #[tokio::main]
 async fn main() -> ExitCode {
