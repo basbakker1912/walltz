@@ -186,11 +186,11 @@ impl FetchArgs {
             image
         };
 
-        let image_path = if let Some(output_file) = self.output {
+        let saved_image = if let Some(output_file) = self.output {
             let pb = ProgressBar::new_spinner();
             pb.enable_steady_tick(Duration::from_millis(120));
             pb.set_message("Saving image to file...");
-            image.save_to_format(&output_file)?;
+            let saved_image = image.save_to_format(&output_file)?;
             pb.finish_with_message(format!(
                 "Successfully saved image to file: {}",
                 fs::canonicalize(&output_file)?
@@ -198,30 +198,21 @@ impl FetchArgs {
                     .ok_or(anyhow!("Failed to convert image path to string."))?
             ));
 
-            output_file
+            saved_image
         } else {
             image.cache()?
         };
 
         if self.assign {
             if let Some(command) = config.set_command {
-                let (program, args) = command.split_once(' ').unwrap_or((command.as_str(), ""));
-                let args = args.replace("{path}", image_path.to_str().unwrap());
-                let args = args.split(' ');
-
-                let result = std::process::Command::new(program)
-                    .args(args)
-                    .output()
-                    .unwrap();
-
                 if !self.simple {
-                    if result.status.success() {
-                        println!("Assigned to image as the active wallpaper.");
-                    } else {
-                        println!(
-                            "Failed to assign wallpaper: {}",
-                            String::from_utf8(result.stderr)?
-                        );
+                    let result = saved_image.apply_with_command(&command);
+
+                    match result {
+                        Ok(_) => println!("Assigned to image as the active wallpaper."),
+                        Err(err) => {
+                            println!("Failed to assign wallpaper: {}", err)
+                        }
                     }
                 }
             } else {
@@ -232,9 +223,10 @@ impl FetchArgs {
         if self.simple {
             println!(
                 "{}",
-                fs::canonicalize(&image_path)?
+                saved_image
+                    .get_absolute_path()?
                     .to_str()
-                    .ok_or(anyhow!("Failed to convert image path to string."))?
+                    .ok_or(anyhow!("Image file was not saved"))?
             );
         }
 

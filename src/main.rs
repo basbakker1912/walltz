@@ -41,7 +41,7 @@
 
 use std::process::ExitCode;
 
-use wallpaper_manager::Program;
+use walltz::Program;
 
 #[tokio::main]
 async fn main() -> ExitCode {

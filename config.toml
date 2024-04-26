@@ -8,3 +8,7 @@ aspect_ratios = ["16:9"]
 name = "ruby"
 # Tags for the group
 tags = ["Ruby Rose (RWBY)"]
+
+[[suppliers]]
+name = "wallhaven"
+file = "./wallhaven_supplier.toml"

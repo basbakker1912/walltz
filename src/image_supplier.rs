@@ -1,9 +1,10 @@
 use std::{
+    fs,
     io::Cursor,
     path::{Path, PathBuf},
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use bytes::Bytes;
 use image::ImageFormat;
 
@@ -18,6 +19,35 @@ pub struct SearchParameters {
     pub aspect_ratios: Vec<String>,
 }
 
+pub struct SavedImage {
+    path: PathBuf,
+    format: ImageFormat,
+}
+
+impl SavedImage {
+    pub fn apply_with_command(&self, command: &str) -> anyhow::Result<()> {
+        let (program, args) = command.split_once(' ').unwrap_or((command, ""));
+        let args = args.replace("{path}", self.path.to_str().unwrap());
+        let args = args.split(' ');
+
+        let result = std::process::Command::new(program).args(args).output()?;
+
+        if result.status.success() {
+            Ok(())
+        } else {
+            bail!(String::from_utf8(result.stderr)?)
+        }
+    }
+
+    pub fn get_absolute_path(&self) -> anyhow::Result<PathBuf> {
+        Ok(fs::canonicalize(&self.path)?)
+    }
+
+    pub fn get_path(&self) -> &Path {
+        &self.path
+    }
+}
+
 pub struct WallpaperImage {
     id: String,
     bytes: Bytes,
@@ -26,7 +56,7 @@ pub struct WallpaperImage {
 
 impl WallpaperImage {
     /// Unlike save, this encodes the image correctly. SLOW
-    pub fn save_to_format(&self, path: &Path) -> anyhow::Result<()> {
+    pub fn save_to_format(&self, path: &Path) -> anyhow::Result<SavedImage> {
         if self
             .format
             .extensions_str()
@@ -35,7 +65,10 @@ impl WallpaperImage {
         {
             self.save(path)?;
 
-            return Ok(());
+            return Ok(SavedImage {
+                path: path.to_owned(),
+                format: self.format,
+            });
         }
 
         let reader = image::io::Reader::with_format(Cursor::new(self.bytes.clone()), self.format);
@@ -43,18 +76,24 @@ impl WallpaperImage {
 
         image.save(path)?;
 
-        Ok(())
+        Ok(SavedImage {
+            path: path.to_owned(),
+            format: self.format,
+        })
     }
 
     /// Just saves the file in it's pred
-    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+    pub fn save(&self, path: &Path) -> anyhow::Result<SavedImage> {
         let image_data = self.bytes.as_ref();
         std::fs::write(path, image_data)?;
 
-        Ok(())
+        Ok(SavedImage {
+            path: path.to_owned(),
+            format: self.format,
+        })
     }
 
-    pub fn cache(&self) -> anyhow::Result<PathBuf> {
+    pub fn cache(&self) -> anyhow::Result<SavedImage> {
         let cache_dir = BASEDIRECTORIES.get_cache_home();
         std::fs::create_dir_all(&cache_dir)?;
         let file_name = {
@@ -67,9 +106,9 @@ impl WallpaperImage {
             format!("wallpaper_{}.{}", self.id, extension)
         };
         let image_path = cache_dir.join(file_name);
-        self.save(&image_path)?;
+        let saved_image = self.save(&image_path)?;
 
-        Ok(image_path)
+        Ok(saved_image)
     }
 }
 
