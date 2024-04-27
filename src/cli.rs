@@ -2,6 +2,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
+mod collections;
 mod fetch;
 
 #[derive(Parser)]
@@ -15,6 +16,10 @@ struct Cli {
 enum Commands {
     /// Fetch an image from any source
     Fetch(fetch::FetchArgs),
+    Collections {
+        #[command(subcommand)]
+        commands: collections::CollectionCommands,
+    },
 }
 
 pub struct Program;
@@ -25,12 +30,13 @@ impl Program {
 
         let result = match cli.commands {
             Commands::Fetch(args) => args.run().await,
+            Commands::Collections { commands } => commands.run().await,
         };
 
         match result {
             Ok(_) => ExitCode::SUCCESS,
             Err(err) => {
-                println!("{}", err);
+                println!("Command failed: '{:?}'", err);
                 ExitCode::FAILURE
             }
         }

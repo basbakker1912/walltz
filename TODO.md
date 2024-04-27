@@ -1,4 +1,4 @@
-- [ ]: A system for saving a current wallpaper to a collection
+- [x]: A system for saving a current wallpaper to a collection
 - [x]: Read url suppliers from a TOML format instead of a supplier
 - [ ]: Global negative filters
 - [ ]: Code cleanup

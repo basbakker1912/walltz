@@ -2,6 +2,7 @@ use std::{
     fs,
     io::Cursor,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use anyhow::{anyhow, bail};
@@ -39,12 +40,61 @@ impl SavedImage {
         }
     }
 
+    pub fn query_from_script(script: &str) -> anyhow::Result<Self> {
+        let script_path = BASEDIRECTORIES.get_config_home().join(&script);
+        let result = std::process::Command::new(script_path).output()?;
+
+        if result.status.success() {
+            let cmd_file_path = String::from_utf8(result.stdout)?;
+            let file_path = PathBuf::from_str(&cmd_file_path.trim())?;
+
+            let format = ImageFormat::from_path(&file_path)?;
+
+            Ok(Self {
+                path: file_path,
+                format,
+            })
+        } else {
+            bail!(String::from_utf8(result.stderr)?)
+        }
+    }
+
+    pub fn from_path<P>(path: P) -> anyhow::Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        let format = ImageFormat::from_path(path)?;
+
+        Ok(Self {
+            path: path.to_owned(),
+            format,
+        })
+    }
+
     pub fn get_absolute_path(&self) -> anyhow::Result<PathBuf> {
         Ok(fs::canonicalize(&self.path)?)
     }
 
     pub fn get_path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn copy_to<P>(&self, path: P) -> anyhow::Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+
+        if ImageFormat::from_path(&path)? != self.format {
+            bail!("Cannot copy to another format");
+            // TODO: Make a function to do this.
+        }
+
+        let image_data = std::fs::read(&self.path)?;
+        std::fs::write(path, image_data)?;
+
+        Ok(())
     }
 }
 
