@@ -4,6 +4,8 @@ use clap::Parser;
 
 mod collections;
 mod fetch;
+mod get;
+mod set;
 
 #[derive(Parser)]
 #[command(name = "Background setter command line interface")]
@@ -20,6 +22,10 @@ enum Commands {
         #[command(subcommand)]
         commands: collections::CollectionCommands,
     },
+    Get(get::GetArgs),
+    /// Allows for quickly setting a wallpaper
+    /// Seach order: Url, Path, Collection, Category, Tag
+    Set(set::SetArgs),
 }
 
 pub struct Program;
@@ -31,6 +37,8 @@ impl Program {
         let result = match cli.commands {
             Commands::Fetch(args) => args.run().await,
             Commands::Collections { commands } => commands.run().await,
+            Commands::Get(args) => args.run().await,
+            Commands::Set(args) => args.run().await,
         };
 
         match result {

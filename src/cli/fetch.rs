@@ -8,6 +8,8 @@ use rand::seq::SliceRandom;
 use crate::{
     config::GlobalConfig,
     image_supplier::{ImageSupplier, SearchParameters},
+    state::State,
+    CONFIG,
 };
 
 #[derive(Args, Clone, Debug)]
@@ -37,14 +39,13 @@ pub struct FetchArgs {
 
 impl FetchArgs {
     pub async fn run(self) -> anyhow::Result<()> {
-        let config = GlobalConfig::read()?;
         let category = {
             match self.category {
                 Some(category_name) => {
-                    if config.categories.len() == 0 {
+                    if CONFIG.categories.len() == 0 {
                         bail!("No categories defined in config file.");
                     }
-                    let mut categories = config
+                    let mut categories = CONFIG
                         .categories
                         .iter()
                         .map(|category| {
@@ -99,25 +100,27 @@ impl FetchArgs {
                         .into_iter()
                         .chain(category.tags.into_iter())
                         .collect(),
-                    aspect_ratios: category.aspect_ratios.unwrap_or_default(),
+                    aspect_ratios: category
+                        .aspect_ratios
+                        .unwrap_or(CONFIG.aspect_ratios.clone()),
                 },
                 // TODO: Add aspect ratio arg in cli
                 None => SearchParameters {
                     tags: self.tags,
-                    aspect_ratios: vec![],
+                    aspect_ratios: CONFIG.aspect_ratios.clone(),
                 },
             }
         };
 
         // TODO: Move this to a function.
         let url_supplier = {
-            if config.suppliers.len() == 0 {
+            if CONFIG.suppliers.len() == 0 {
                 bail!("No suppliers defined in config file.");
             }
 
             let supplier_file = match self.supplier {
                 Some(supplier_name) => {
-                    let mut suppliers = config
+                    let mut suppliers = CONFIG
                         .suppliers
                         .iter()
                         .map(|category| {
@@ -154,7 +157,7 @@ impl FetchArgs {
                 }
                 None => {
                     // Unwrap here, seeing that there being no entry in the array is checked earlier.
-                    config.suppliers.choose(&mut rand::thread_rng()).unwrap()
+                    CONFIG.suppliers.choose(&mut rand::thread_rng()).unwrap()
                 }
             };
 
@@ -204,19 +207,16 @@ impl FetchArgs {
         };
 
         if self.assign {
-            if let Some(command) = config.set_command {
-                if !self.simple {
-                    let result = saved_image.apply_with_command(&command);
+            let mut state = State::load()?;
+            state.set_current_image(&saved_image)?;
+            let result = state.assign_current_image();
 
-                    match result {
-                        Ok(_) => println!("Assigned to image as the active wallpaper."),
-                        Err(err) => {
-                            println!("Failed to assign wallpaper: {}", err)
-                        }
-                    }
+            match result {
+                Ok(_) if !self.simple => println!("Assigned to image as the active wallpaper."),
+                Ok(_) => {}
+                Err(err) => {
+                    println!("Failed to assign wallpaper: {}", err)
                 }
-            } else {
-                bail!("No 'set_command' entry present in config");
             }
         }
 

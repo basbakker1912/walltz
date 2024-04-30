@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    any, fs,
     io::Cursor,
     path::{Path, PathBuf},
     str::FromStr,
@@ -7,10 +7,12 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use bytes::Bytes;
+use clap::error;
 use image::ImageFormat;
 
 mod url_supplier;
 
+use thiserror::Error;
 pub use url_supplier::UrlSupplier;
 
 use crate::BASEDIRECTORIES;
@@ -20,50 +22,28 @@ pub struct SearchParameters {
     pub aspect_ratios: Vec<String>,
 }
 
+#[derive(Error, Debug, Clone)]
+enum LoadImageError {
+    #[error("The image at path: {0:?} doesn't exist")]
+    ImageDoesntExistError(PathBuf),
+}
+
 pub struct SavedImage {
     path: PathBuf,
     format: ImageFormat,
 }
 
 impl SavedImage {
-    pub fn apply_with_command(&self, command: &str) -> anyhow::Result<()> {
-        let (program, args) = command.split_once(' ').unwrap_or((command, ""));
-        let args = args.replace("{path}", self.path.to_str().unwrap());
-        let args = args.split(' ');
-
-        let result = std::process::Command::new(program).args(args).output()?;
-
-        if result.status.success() {
-            Ok(())
-        } else {
-            bail!(String::from_utf8(result.stderr)?)
-        }
-    }
-
-    pub fn query_from_script(script: &str) -> anyhow::Result<Self> {
-        let script_path = BASEDIRECTORIES.get_config_home().join(&script);
-        let result = std::process::Command::new(script_path).output()?;
-
-        if result.status.success() {
-            let cmd_file_path = String::from_utf8(result.stdout)?;
-            let file_path = PathBuf::from_str(&cmd_file_path.trim())?;
-
-            let format = ImageFormat::from_path(&file_path)?;
-
-            Ok(Self {
-                path: file_path,
-                format,
-            })
-        } else {
-            bail!(String::from_utf8(result.stderr)?)
-        }
-    }
-
     pub fn from_path<P>(path: P) -> anyhow::Result<Self>
     where
         P: AsRef<Path>,
     {
         let path = path.as_ref();
+
+        if !path.is_file() {
+            bail!(LoadImageError::ImageDoesntExistError(path.to_owned()))
+        }
+
         let format = ImageFormat::from_path(path)?;
 
         Ok(Self {
@@ -74,6 +54,15 @@ impl SavedImage {
 
     pub fn get_absolute_path(&self) -> anyhow::Result<PathBuf> {
         Ok(fs::canonicalize(&self.path)?)
+    }
+
+    pub fn get_absolute_path_as_string(&self) -> anyhow::Result<String> {
+        let image_path_buf = self.get_absolute_path()?;
+        let image_path_str = image_path_buf
+            .to_str()
+            .ok_or(anyhow::anyhow!("Failed to get image path"))?;
+
+        Ok(image_path_str.to_string())
     }
 
     pub fn get_path(&self) -> &Path {
@@ -98,13 +87,13 @@ impl SavedImage {
     }
 }
 
-pub struct WallpaperImage {
+pub struct FetchedImage {
     id: String,
     bytes: Bytes,
     format: ImageFormat,
 }
 
-impl WallpaperImage {
+impl FetchedImage {
     /// Unlike save, this encodes the image correctly. SLOW
     pub fn save_to_format(&self, path: &Path) -> anyhow::Result<SavedImage> {
         if self
@@ -160,6 +149,17 @@ impl WallpaperImage {
 
         Ok(saved_image)
     }
+
+    pub async fn fetch_from_url(image_url: ImageUrlObject) -> anyhow::Result<Self> {
+        let image_result = reqwest::get(&image_url.url).await?;
+        let image_bytes = image_result.bytes().await?;
+
+        Ok(FetchedImage {
+            id: image_url.id,
+            bytes: image_bytes,
+            format: image_url.image_format,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -169,33 +169,97 @@ pub struct ImageUrlObject {
     image_format: ImageFormat,
 }
 
+impl ImageUrlObject {
+    pub fn from_url<P>(url: P) -> anyhow::Result<Self>
+    where
+        P: AsRef<str>,
+    {
+        let url = url.as_ref();
+        let url_path = std::path::PathBuf::from_str(url)?;
+        let id = url_path
+            .file_stem()
+            .map_or(uuid::Uuid::new_v4().to_string(), |v| {
+                v.to_os_string()
+                    .into_string()
+                    .unwrap_or(uuid::Uuid::new_v4().to_string())
+            });
+
+        let image_format = ImageFormat::from_path(&url_path)?;
+
+        Ok(Self {
+            id,
+            url: url.to_owned(),
+            image_format,
+        })
+    }
+}
+
 pub struct ImageSupplier {
     url_supplier: UrlSupplier,
 }
 
 impl ImageSupplier {
-    async fn get_image(&self, image_url: ImageUrlObject) -> anyhow::Result<WallpaperImage> {
-        let image_result = reqwest::get(&image_url.url).await?;
-        let image_bytes = image_result.bytes().await?;
-
-        Ok(WallpaperImage {
-            id: image_url.id,
-            bytes: image_bytes,
-            format: image_url.image_format,
-        })
-    }
-
     pub async fn get_wallpaper_image(
         &self,
         parameters: SearchParameters,
-    ) -> anyhow::Result<WallpaperImage> {
+    ) -> anyhow::Result<FetchedImage> {
         let image_url = self.url_supplier.clone().search(parameters).await?;
-        let image = self.get_image(image_url).await?;
+        let image = FetchedImage::fetch_from_url(image_url).await?;
 
         Ok(image)
     }
 
     pub fn new(url_supplier: UrlSupplier) -> Self {
         Self { url_supplier }
+    }
+}
+
+#[derive(Debug, Error)]
+enum ExternalImageError {
+    #[error("The specified path: {0}, is invalid")]
+    InvalidPathError(String),
+    #[error("Failed to fetch the image, reason: {0:?}")]
+    FetchImageFailedError(anyhow::Error),
+    #[error("No file at path: {0}, reason: {1:?}")]
+    NoFileAtPathError(String, anyhow::Error),
+}
+
+pub struct ExternalImage<'a> {
+    path: &'a str,
+}
+
+impl<'a> ExternalImage<'a> {
+    async fn fetch_from_url(&self) -> anyhow::Result<SavedImage> {
+        let image_url = ImageUrlObject::from_url(&self.path)?;
+        let fetched_image = FetchedImage::fetch_from_url(image_url).await?;
+        fetched_image.cache()
+    }
+
+    pub fn new(path: &'a str) -> Self {
+        Self { path }
+    }
+
+    pub async fn load(&self) -> anyhow::Result<SavedImage> {
+        let image = match self.path {
+            url if url.starts_with("https://") || url.starts_with("http://") => {
+                let result = self.fetch_from_url().await;
+
+                match result {
+                    Ok(image) => image,
+                    Err(err) => bail!(ExternalImageError::FetchImageFailedError(err)),
+                }
+            }
+            path if PathBuf::from_str(&path).is_ok_and(|v| v.is_file()) => {
+                let result = SavedImage::from_path(&path);
+
+                match result {
+                    Ok(image) => image,
+                    Err(err) => bail!(ExternalImageError::NoFileAtPathError(path.to_owned(), err)),
+                }
+            }
+            _ => bail!(ExternalImageError::InvalidPathError(self.path.to_owned())),
+        };
+
+        Ok(image)
     }
 }

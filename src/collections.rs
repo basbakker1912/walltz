@@ -124,4 +124,8 @@ impl Collection {
             bail!("No images in collection");
         }
     }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
 }

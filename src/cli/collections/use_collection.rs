@@ -1,6 +1,6 @@
 use anyhow::bail;
 
-use crate::{collections::Collection, config::GlobalConfig};
+use crate::{collections::Collection, config::GlobalConfig, state::State};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct UseArgs {
@@ -10,20 +10,13 @@ pub struct UseArgs {
 
 impl UseArgs {
     pub async fn run(self) -> anyhow::Result<()> {
-        let config = GlobalConfig::read()?;
-        let set_wallpaper_command = {
-            if let Some(cmd) = config.set_command {
-                cmd
-            } else {
-                bail!("Cannot use a collection without setting a wallpaper.");
-            }
-        };
-
         let collection = Collection::open(&self.collection)?;
 
         let image = collection.get_random_image()?;
 
-        image.apply_with_command(&set_wallpaper_command)?;
+        let mut state = State::load()?;
+        state.set_current_collection(&collection, &image);
+        state.assign_current_image()?;
 
         println!(
             "Set wallpaper to image: {}",

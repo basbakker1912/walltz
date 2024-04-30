@@ -1,8 +1,13 @@
-use std::fs;
+use std::{fs, path::PathBuf, str::FromStr};
 
 use anyhow::bail;
 
-use crate::{collections::Collection, config::GlobalConfig, image_supplier::SavedImage};
+use crate::{
+    collections::Collection,
+    config::GlobalConfig,
+    image_supplier::{ExternalImage, FetchedImage, ImageUrlObject, SavedImage},
+    state::State,
+};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct SaveImageArgs {
@@ -14,26 +19,18 @@ pub struct SaveImageArgs {
 
 impl SaveImageArgs {
     pub async fn run(self) -> anyhow::Result<()> {
-        match self.which {
-            Some(_) => todo!(),
-            None => {
-                let config = GlobalConfig::read()?;
+        let collection = Collection::open(&self.collection)?;
 
-                let collection = Collection::open(&self.collection)?;
+        let state = State::load()?;
 
-                let query_script = {
-                    if let Some(script) = config.query_script {
-                        script
-                    } else {
-                        bail!("No query script set in config");
-                    }
-                };
-                let image = SavedImage::query_from_script(&query_script)?;
-                collection.add_image_to_collection(&image)?;
+        let image = match self.which {
+            Some(path) => ExternalImage::new(&path).load().await?,
+            None => state.get_current_image()?,
+        };
 
-                println!("Added current wallpaper to collection: {}", self.collection);
-            }
-        }
+        collection.add_image_to_collection(&image)?;
+
+        println!("Added current wallpaper to collection: {}", self.collection);
 
         Ok(())
     }

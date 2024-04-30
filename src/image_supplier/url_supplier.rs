@@ -103,6 +103,8 @@ impl UrlSupplier {
             .send()
             .await?;
 
+        dbg!(result.url().to_string());
+
         let response_data = match self.response.format {
             ResponseFormat::Json => {
                 let response: HashMap<String, serde_json::Value> =
