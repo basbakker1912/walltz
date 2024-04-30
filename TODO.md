@@ -2,3 +2,4 @@
 - [x]: Read url suppliers from a TOML format instead of a supplier
 - [ ]: Global negative filters
 - [ ]: Code cleanup
+- [ ]: Actual documentation
