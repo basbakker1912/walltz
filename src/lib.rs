@@ -3,7 +3,9 @@ pub mod config;
 pub mod image_supplier;
 pub use cli::Program;
 use config::GlobalConfig;
+pub mod category;
 pub mod collections;
+pub mod finder;
 pub mod state;
 
 lazy_static::lazy_static! {

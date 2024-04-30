@@ -103,8 +103,6 @@ impl UrlSupplier {
             .send()
             .await?;
 
-        dbg!(result.url().to_string());
-
         let response_data = match self.response.format {
             ResponseFormat::Json => {
                 let response: HashMap<String, serde_json::Value> =
@@ -117,9 +115,9 @@ impl UrlSupplier {
                             .ok_or(anyhow!("Key not found in response: {}", key))?;
 
                         if let serde_json::Value::Array(array) = value {
-                            let entry = array
-                                .first()
-                                .ok_or(anyhow!("No entry in array for key: {}", key))?;
+                            let entry = array.first().ok_or(anyhow!(
+                                "Response is empty, update your search parameters"
+                            ))?;
 
                             entry
                         } else {

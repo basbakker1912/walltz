@@ -6,7 +6,9 @@ use indicatif::ProgressBar;
 use rand::seq::SliceRandom;
 
 use crate::{
+    category::Category,
     config::GlobalConfig,
+    finder::{check_string_equality, find_best_by_value},
     image_supplier::{ImageSupplier, SearchParameters},
     state::State,
     CONFIG,
@@ -30,9 +32,6 @@ pub struct FetchArgs {
     // Additional tags to add.
     tags: Vec<String>,
     #[arg(long)]
-    /// Whether or not to allow non-sfw content, false by default
-    nsfw: bool,
-    #[arg(long)]
     /// Only return the images final path, for use in scripts.
     simple: bool,
 }
@@ -41,53 +40,7 @@ impl FetchArgs {
     pub async fn run(self) -> anyhow::Result<()> {
         let category = {
             match self.category {
-                Some(category_name) => {
-                    if CONFIG.categories.len() == 0 {
-                        bail!("No categories defined in config file.");
-                    }
-                    let mut categories = CONFIG
-                        .categories
-                        .iter()
-                        .map(|category| {
-                            let equality = category
-                                .name
-                                .chars()
-                                .map(|char| char.to_ascii_lowercase())
-                                .zip(category_name.chars().map(|char| char.to_ascii_lowercase()))
-                                .filter(|(a, b)| a == b)
-                                .count();
-                            (category, equality)
-                        })
-                        .collect::<Vec<_>>();
-
-                    categories
-                        .sort_by(|(_, simularity1), (_, simularity2)| simularity2.cmp(simularity1));
-
-                    // Unwrap here, seeing that there being no entry in the array is checked earlier.
-                    let (best_category, simularity) = *categories.first().unwrap();
-
-                    if simularity != category_name.len() {
-                        if simularity as f32 / category_name.len() as f32 >= 0.5 {
-                            bail!(
-                                "No category for name: {}, did you mean: {}?",
-                                category_name,
-                                best_category.name
-                            );
-                        } else {
-                            bail!(
-                                "No category for name: {}, did you mean one of these:{}",
-                                category_name,
-                                categories
-                                    .iter()
-                                    .take(5)
-                                    .map(|v| format!("\n- {}", v.0.name))
-                                    .collect::<String>()
-                            );
-                        }
-                    }
-
-                    Some(best_category.to_owned())
-                }
+                Some(category_name) => Some(Category::find_in_config(&category_name)?),
                 None => None,
             }
         };
@@ -100,9 +53,7 @@ impl FetchArgs {
                         .into_iter()
                         .chain(category.tags.into_iter())
                         .collect(),
-                    aspect_ratios: category
-                        .aspect_ratios
-                        .unwrap_or(CONFIG.aspect_ratios.clone()),
+                    aspect_ratios: category.aspect_ratios,
                 },
                 // TODO: Add aspect ratio arg in cli
                 None => SearchParameters {
@@ -120,40 +71,26 @@ impl FetchArgs {
 
             let supplier_file = match self.supplier {
                 Some(supplier_name) => {
-                    let mut suppliers = CONFIG
-                        .suppliers
-                        .iter()
-                        .map(|category| {
-                            let equality = category
-                                .name
-                                .chars()
-                                .map(|char| char.to_ascii_lowercase())
-                                .zip(supplier_name.chars().map(|char| char.to_ascii_lowercase()))
-                                .filter(|(a, b)| a == b)
-                                .count();
-                            (category, equality)
-                        })
-                        .collect::<Vec<_>>();
+                    let (equal, best_value) = find_best_by_value(
+                        supplier_name.as_str(),
+                        CONFIG.suppliers.iter(),
+                        |value| value.name.as_str(),
+                        |v1, v2| check_string_equality(v1, v2),
+                    );
 
-                    suppliers
-                        .sort_by(|(_, simularity1), (_, simularity2)| simularity1.cmp(simularity2));
-
-                    // Unwrap here, seeing that there being no entry in the array is checked earlier.
-                    let (best_supplier, simularity) = *suppliers.first().unwrap();
-
-                    if simularity != supplier_name.len() {
-                        if simularity as f32 / supplier_name.len() as f32 >= 0.5 {
+                    if let Some(value) = best_value {
+                        if equal {
+                            value
+                        } else {
                             bail!(
                                 "No category for name: {}, did you mean: {}?",
                                 supplier_name,
-                                best_supplier.name
+                                value.name
                             );
-                        } else {
-                            bail!("No suppliers for name: {}", supplier_name);
                         }
+                    } else {
+                        bail!("No suppliers for name: {}", supplier_name);
                     }
-
-                    best_supplier
                 }
                 None => {
                     // Unwrap here, seeing that there being no entry in the array is checked earlier.

@@ -36,7 +36,10 @@ impl SetArgs {
 
         // TODO: Fetch from category here
 
-        bail!("Invalid name");
+        bail!(
+            "The name: {} is not a valid url, path or collection",
+            self.name
+        );
     }
 
     pub async fn run(self) -> anyhow::Result<()> {

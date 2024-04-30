@@ -73,6 +73,12 @@ impl Collection {
         }
     }
 
+    pub fn delete(self) -> anyhow::Result<()> {
+        std::fs::remove_dir_all(self.path)?;
+
+        Ok(())
+    }
+
     // Image management
     fn find_image_in_collection(&self, name: &str) -> anyhow::Result<Option<PathBuf>> {
         let image = std::fs::read_dir(&self.path)?.find(|file| {
