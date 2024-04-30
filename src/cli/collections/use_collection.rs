@@ -1,6 +1,4 @@
-use anyhow::bail;
-
-use crate::{collections::Collection, config::GlobalConfig, state::State};
+use crate::{collections::Collection, state::State};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct UseArgs {
@@ -15,7 +13,7 @@ impl UseArgs {
         let image = collection.get_random_image()?;
 
         let mut state = State::load()?;
-        state.set_current_collection(&collection, &image);
+        state.set_current_collection(&collection, &image)?;
         state.assign_current_image()?;
 
         println!(

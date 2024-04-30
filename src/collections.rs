@@ -1,4 +1,4 @@
-use std::{os::linux::raw::stat, path::PathBuf};
+use std::{path::PathBuf};
 
 use anyhow::bail;
 use rand::seq::IteratorRandom;

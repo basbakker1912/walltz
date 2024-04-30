@@ -1,5 +1,5 @@
 use std::{
-    any, fs,
+    fs,
     io::Cursor,
     path::{Path, PathBuf},
     str::FromStr,
@@ -7,7 +7,6 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use bytes::Bytes;
-use clap::error;
 use image::ImageFormat;
 
 mod url_supplier;

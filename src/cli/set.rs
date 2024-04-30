@@ -1,6 +1,5 @@
 use anyhow::bail;
 use clap::Args;
-use image::imageops::colorops;
 
 use crate::{
     collections::Collection,

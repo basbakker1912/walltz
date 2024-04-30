@@ -1,11 +1,8 @@
-use std::{fs, path::PathBuf, str::FromStr};
 
-use anyhow::bail;
 
 use crate::{
     collections::Collection,
-    config::GlobalConfig,
-    image_supplier::{ExternalImage, FetchedImage, ImageUrlObject, SavedImage},
+    image_supplier::{ExternalImage},
     state::State,
 };
 

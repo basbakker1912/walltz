@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    str::{FromStr, Split},
+    str::{Split},
 };
 
 use anyhow::bail;
