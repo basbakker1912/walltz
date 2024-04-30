@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    str::{Split},
-};
+use std::{path::PathBuf, str::Split};
 
 use anyhow::bail;
 use serde::{Deserialize, Serialize};

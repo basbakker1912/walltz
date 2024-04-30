@@ -1,4 +1,4 @@
-use std::{fs, io::Read, path::PathBuf, time::Duration};
+use std::{fs, path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, bail};
 use clap::Args;
