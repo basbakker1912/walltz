@@ -40,12 +40,12 @@ impl<'a> SetImageCommand<'a> {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-enum ImageType {
+pub enum ImageStateType {
     Image { path: String },
     Collection { name: String, image_path: String },
 }
 
-impl ImageType {
+impl ImageStateType {
     pub fn get_image_path(&self) -> &str {
         match self {
             Self::Image { path } => path,
@@ -65,7 +65,7 @@ impl ImageType {
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct State {
-    image: Option<ImageType>,
+    image: Option<ImageStateType>,
 }
 
 impl State {
@@ -94,6 +94,10 @@ impl State {
         Ok(())
     }
 
+    pub fn get_state(&self) -> Option<&ImageStateType> {
+        self.image.as_ref()
+    }
+
     pub fn get_current_image(&self) -> anyhow::Result<SavedImage> {
         if let Some(current_image) = &self.image {
             current_image.load_saved_image()
@@ -104,7 +108,7 @@ impl State {
 
     /// Sets the current image and assigns it, if there is a command specified, else it just sets the state.
     pub fn set_current_image(&mut self, image: &SavedImage) -> anyhow::Result<()> {
-        self.image = Some(ImageType::Image {
+        self.image = Some(ImageStateType::Image {
             path: image.get_absolute_path_as_string()?,
         });
 
@@ -116,7 +120,7 @@ impl State {
         collection: &Collection,
         image: &SavedImage,
     ) -> anyhow::Result<()> {
-        self.image = Some(ImageType::Collection {
+        self.image = Some(ImageStateType::Collection {
             name: collection.get_name().to_owned(),
             image_path: image.get_absolute_path_as_string()?,
         });

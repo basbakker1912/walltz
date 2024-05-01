@@ -25,6 +25,7 @@ enum Commands {
     Get(get::GetArgs),
     /// Allows for quickly setting a wallpaper
     /// Seach order: Url, Path, Collection, Category, Tag
+    #[clap(visible_alias("use"))]
     Set(set::SetArgs),
 }
 

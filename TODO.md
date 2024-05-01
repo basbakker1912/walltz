@@ -3,3 +3,4 @@
 - [ ]: Global negative filters
 - [ ]: Code cleanup
 - [ ]: Actual documentation
+- [ ]: Cleanup of the cache after a wallpaper hasn't been used for a week
