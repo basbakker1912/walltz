@@ -4,3 +4,4 @@
 - [ ]: Code cleanup
 - [ ]: Actual documentation
 - [ ]: Cleanup of the cache after a wallpaper hasn't been used for a week
+- [ ]: Allow creation a git repository from a collection to save and sync it
