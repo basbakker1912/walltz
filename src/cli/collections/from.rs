@@ -2,9 +2,6 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, bail};
 use clap::Args;
-use image::ImageFormat;
-
-use crate::collections::Collection;
 
 #[derive(Debug, Clone, Args)]
 pub struct FromArgs {

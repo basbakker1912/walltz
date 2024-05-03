@@ -4,8 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, bail};
-use git2::{Cred, FetchOptions, PushOptions, Remote, RemoteCallbacks, Repository, Signature};
+use git2::{Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository};
 use image::ImageFormat;
 use rand::seq::IteratorRandom;
 use thiserror::Error;
@@ -242,7 +241,7 @@ impl CollectionDirectory {
         Self::check_name(name)?;
 
         let path = CollectionPath::from_name(name);
-        path.create_directory();
+        path.create_directory()?;
 
         let repository = match remote_url {
             Some(url) => Some(CollectionRepository::initialize(&path, url)?),
