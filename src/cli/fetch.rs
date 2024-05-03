@@ -9,7 +9,7 @@ use crate::{
     category::Category,
     config::GlobalConfig,
     finder::{check_string_equality, find_best_by_value},
-    image_supplier::{ImageSupplier, SearchParameters},
+    image_supplier::{FetchedImage, SearchParameters, UrlSupplier},
     state::State,
     CONFIG,
 };
@@ -64,7 +64,7 @@ impl FetchArgs {
         };
 
         // TODO: Move this to a function.
-        let url_supplier = {
+        let url_supplier: UrlSupplier = {
             if CONFIG.suppliers.len() == 0 {
                 bail!("No suppliers defined in config file.");
             }
@@ -112,15 +112,15 @@ impl FetchArgs {
                 }
             }
         };
-        let supplier = ImageSupplier::new(url_supplier);
+        let search_result = url_supplier.search(parameters).await?;
 
         let image = if self.simple {
-            supplier.get_wallpaper_image(parameters).await?
+            FetchedImage::fetch_from_url(search_result).await?
         } else {
             let pb = ProgressBar::new_spinner();
             pb.enable_steady_tick(Duration::from_millis(120));
             pb.set_message("Downloading...");
-            let image = supplier.get_wallpaper_image(parameters).await?;
+            let image = FetchedImage::fetch_from_url(search_result).await?;
             pb.finish_with_message("Downloaded");
 
             image

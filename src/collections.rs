@@ -25,7 +25,7 @@ pub enum CollectionError {
     NoGitFound,
     #[error("A git related failure occured: {0}")]
     GitError(git2::Error),
-    #[error("A internal file system error occured: {0}")]
+    #[error("An internal file system error occured: {0}")]
     FsError(io::Error),
     #[error("There are not files to be found in the collection")]
     CollectionEmpty,
