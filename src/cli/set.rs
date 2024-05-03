@@ -37,7 +37,7 @@ impl SetArgs {
         let collection = Collection::open(&name);
 
         if let Ok(collection) = collection {
-            let image = collection.get_random_image()?;
+            let image = collection.get_directory().get_random_image()?;
 
             return Ok(FetchImageResultData::Collection(collection, image));
         }
@@ -48,7 +48,7 @@ impl SetArgs {
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
-        let mut state = State::load()?;
+        let mut state = State::open()?;
 
         if self.reapply {
             let image_state = state.get_state();
@@ -65,7 +65,10 @@ impl SetArgs {
                         image_path: _,
                     } => {
                         let colletion = Collection::open(&name)?;
-                        state.set_current_collection(&colletion, &colletion.get_random_image()?)?;
+                        state.set_current_collection(
+                            &colletion,
+                            &colletion.get_directory().get_random_image()?,
+                        )?;
                         state.assign_current_image()?;
                     }
                 }

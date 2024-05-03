@@ -20,6 +20,7 @@ pub struct SupplierFile {
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct GlobalConfig {
     pub set_command: Option<String>,
+    pub private_key_path: Option<String>,
     #[serde(default)]
     pub categories: Vec<CategoryConfig>,
     #[serde(default)]

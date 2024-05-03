@@ -1,18 +1,27 @@
+use clap::Args;
 use regex::Regex;
 
 use crate::collections::Collection;
 
-#[derive(clap::Args, Clone, Debug)]
-pub struct CreateCollectionArgs {
-    #[arg(short, long)]
-    /// Wether to sync the repository through git
-    git: bool,
+#[derive(Debug, Clone, Args)]
+pub struct SyncArgs {
+    /// The name of the collection to sync.
     name: String,
 }
 
-impl CreateCollectionArgs {
+impl SyncArgs {
     pub async fn run(self) -> anyhow::Result<()> {
-        if self.git {
+        let mut collection = Collection::open(&self.name)?;
+
+        let repository = if let Some(repository) = collection.get_repository() {
+            let commit_message: String = dialoguer::Input::new()
+                .with_prompt("Commit message")
+                .interact_text()?;
+
+            repository.commit_all(&commit_message)?;
+
+            repository
+        } else {
             let check_regex = Regex::new(
                 r#"((git|ssh|http(s)?)|(git@[\w\.]+))(:(//)?)([\w\.@\:/\-~]+)(\.git)(/)?"#,
             )?;
@@ -27,12 +36,12 @@ impl CreateCollectionArgs {
                 })
                 .interact_text()?;
 
-            Collection::create(&self.name, Some(&remote_url))?;
-        } else {
-            Collection::create(&self.name, None)?;
+            collection
+                .get_directory_mut()
+                .initialize_repository(&remote_url)?
         };
 
-        println!("Successfully created the collection: {}", self.name);
+        repository.sync()?;
 
         Ok(())
     }

@@ -144,7 +144,7 @@ impl FetchArgs {
         };
 
         if self.assign {
-            let mut state = State::load()?;
+            let mut state = State::open()?;
             state.set_current_image(&saved_image)?;
             let result = state.assign_current_image();
 

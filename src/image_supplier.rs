@@ -68,7 +68,20 @@ impl SavedImage {
         &self.path
     }
 
-    pub fn copy_to<P>(&self, path: P) -> anyhow::Result<()>
+    pub fn get_name(&self) -> anyhow::Result<String> {
+        Ok(self
+            .path
+            .file_stem()
+            .ok_or(anyhow::anyhow!("No file name present"))?
+            .to_string_lossy()
+            .into_owned())
+    }
+
+    pub fn get_format(&self) -> ImageFormat {
+        self.format
+    }
+
+    pub fn copy_to<P>(&self, path: P) -> anyhow::Result<SavedImage>
     where
         P: AsRef<Path>,
     {
@@ -82,7 +95,7 @@ impl SavedImage {
         let image_data = std::fs::read(&self.path)?;
         std::fs::write(path, image_data)?;
 
-        Ok(())
+        Ok(SavedImage::from_path(path)?)
     }
 }
 

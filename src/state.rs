@@ -69,7 +69,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn load() -> anyhow::Result<Self> {
+    pub fn open() -> anyhow::Result<Self> {
         let file_content = std::fs::read_to_string(STATE_FILE.clone());
 
         match file_content {
