@@ -1,8 +1,6 @@
 use std::{io, path::PathBuf, str::Split};
 
 use crate::image_supplier::ImageError;
-use anyhow::bail;
-use clap::error;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
