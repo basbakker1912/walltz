@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, bail};
 use image::ImageFormat;
 use rand::Rng;
+use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -188,8 +189,8 @@ impl UrlSupplier {
                     };
 
                     ImageUrlObject {
-                        id: image_id,
-                        url: image_url,
+                        stem: image_id,
+                        url: Url::from_str(&image_url)?,
                         image_format,
                     }
                 } else {

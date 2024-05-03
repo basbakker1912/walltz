@@ -1,8 +1,9 @@
 use std::{
-    fs,
-    io::{self, Cursor},
+    fs::{self, metadata},
+    io::{self, BufReader, Cursor},
     path::{Path, PathBuf},
     str::FromStr,
+    time::Duration,
 };
 
 use bytes::Bytes;
@@ -10,10 +11,11 @@ use image::ImageFormat;
 
 mod url_supplier;
 
+use reqwest::Url;
 use thiserror::Error;
 pub use url_supplier::UrlSupplier;
 
-use crate::BASEDIRECTORIES;
+use crate::{BASEDIRECTORIES, IMAGECACHE};
 
 pub struct SearchParameters {
     pub tags: Vec<String>,
@@ -34,6 +36,10 @@ pub enum ImageError {
     WriteFailed,
     #[error("Failed to fetch image from url: {0:?}")]
     FetchError(reqwest::Error),
+    #[error("The supplied url is invalid")]
+    InvalidUrl,
+    #[error("The supplied external image location is invalid")]
+    InvalidExternal,
 }
 
 pub struct SavedImage {
@@ -119,9 +125,111 @@ impl SavedImage {
     }
 }
 
+/// A image cache manager, does cleanup next to saving and retrieving images.
+pub struct ImageCache {
+    path: PathBuf,
+}
+
+impl ImageCache {
+    pub fn cleanup_cache(&self) -> Result<(), ImageError> {
+        let files = match self.path.read_dir() {
+            Ok(files) => files,
+            Err(err) => return Err(ImageError::FsError(err)),
+        };
+
+        fn should_cull(dir: std::fs::DirEntry) -> Option<PathBuf> {
+            let dir_path = dir.path();
+
+            let is_image = ImageFormat::from_path(&dir_path).is_ok();
+            if !is_image {
+                return None;
+            }
+
+            let last_modified = match dir.metadata().and_then(|metadata| metadata.modified()) {
+                Ok(modified) => modified,
+                Err(_) => return None,
+            };
+
+            let elapsed_since_modified = match last_modified.elapsed() {
+                Ok(elapsed) => elapsed,
+                Err(_) => return None,
+            };
+
+            // 7 days before deletion
+            // TODO: Make this a value in the config
+            const DELETION_THRESHOLD: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
+            if elapsed_since_modified > DELETION_THRESHOLD {
+                Some(dir_path)
+            } else {
+                None
+            }
+        }
+
+        for file_path in files.filter_map(|dir| dir.ok().and_then(should_cull)) {
+            match std::fs::remove_file(file_path) {
+                Ok(_) => {}
+                Err(err) => return Err(ImageError::FsError(err)),
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn open() -> Self {
+        let this = Self {
+            path: BASEDIRECTORIES.get_cache_home(),
+        };
+
+        this
+    }
+
+    pub fn find(&self, name: &str) -> Result<SavedImage, ImageError> {
+        let mut files = match self.path.read_dir() {
+            Ok(direntries) => direntries,
+            Err(err) => return Err(ImageError::FsError(err)),
+        };
+
+        let file = files.find_map(|direntry| match direntry {
+            Ok(direntry) => {
+                let file_path = direntry.path();
+                let stem = match file_path.file_stem() {
+                    Some(stem) => stem.to_string_lossy(),
+                    None => return None,
+                };
+
+                if stem == name {
+                    Some(file_path)
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        });
+
+        match file {
+            Some(file_path) => SavedImage::from_path(file_path),
+            None => Err(ImageError::NotFound),
+        }
+    }
+
+    pub fn cache(&self, image: &FetchedImage) -> Result<SavedImage, ImageError> {
+        let file_name = image.get_file_name();
+        match BASEDIRECTORIES.place_cache_file(file_name) {
+            Ok(file_path) => image.save(&file_path),
+            Err(err) => Err(ImageError::FsError(err)),
+        }
+    }
+}
+
+enum FetchedImageType {
+    Storage(SavedImage),
+    Memory(Bytes),
+}
+
 pub struct FetchedImage {
-    id: String,
-    bytes: Bytes,
+    stem: String,
+    data: FetchedImageType,
     format: ImageFormat,
 }
 
@@ -147,9 +255,26 @@ impl FetchedImage {
             });
         }
 
-        let reader = image::io::Reader::with_format(Cursor::new(self.bytes.clone()), self.format);
+        let result = match &self.data {
+            FetchedImageType::Memory(bytes) => {
+                let reader =
+                    image::io::Reader::with_format(Cursor::new(bytes.clone()), self.format);
 
-        match reader.decode().and_then(|image| image.save(path)) {
+                reader.decode().and_then(|image| image.save(path))
+            }
+            FetchedImageType::Storage(saved) => {
+                let reader = image::io::Reader::with_format(
+                    io::BufReader::new(
+                        fs::File::open(saved.get_path()).map_err(|err| ImageError::FsError(err))?,
+                    ),
+                    self.format,
+                );
+
+                reader.decode().and_then(|image| image.save(path))
+            }
+        };
+
+        match result {
             Ok(_) => Ok(SavedImage {
                 path: path.to_owned(),
                 format: self.format,
@@ -160,48 +285,58 @@ impl FetchedImage {
 
     /// Just saves the file in it's pred
     pub fn save(&self, path: &Path) -> Result<SavedImage, ImageError> {
-        let image_data = self.bytes.as_ref();
-        match std::fs::write(path, image_data) {
-            Ok(_) => Ok(SavedImage {
-                path: path.to_owned(),
-                format: self.format,
-            }),
-            Err(err) => Err(ImageError::FsError(err)),
-        }
-    }
+        match &self.data {
+            FetchedImageType::Memory(bytes) => {
+                if !path.extension().is_some_and(|ext| {
+                    self.format
+                        .extensions_str()
+                        .contains(&ext.to_string_lossy().as_ref())
+                }) {
+                    return Err(ImageError::IncompatibleFormat);
+                }
 
-    pub fn cache(&self) -> Result<SavedImage, ImageError> {
-        let cache_dir = BASEDIRECTORIES.get_cache_home();
-
-        match std::fs::create_dir_all(&cache_dir) {
-            Ok(_) => {
-                let file_name = {
-                    // Unwrap here because there will always be atleast 1 extension for a format
-                    let extension = self.format.extensions_str().first().unwrap();
-
-                    format!("wallpaper_{}.{}", self.id, extension)
-                };
-                let image_path = cache_dir.join(file_name);
-                let saved_image = self.save(&image_path)?;
-
-                Ok(saved_image)
+                let image_data = bytes.as_ref();
+                match std::fs::write(path, image_data) {
+                    Ok(_) => Ok(SavedImage {
+                        path: path.to_owned(),
+                        format: self.format,
+                    }),
+                    Err(err) => Err(ImageError::FsError(err)),
+                }
             }
-            Err(err) => Err(ImageError::FsError(err)),
+            FetchedImageType::Storage(saved) => saved.copy_to(path),
         }
     }
 
+    pub fn get_file_extension(&self) -> &str {
+        self.format.extensions_str().first().unwrap()
+    }
+
+    pub fn get_file_name(&self) -> String {
+        format!("{}.{}", self.stem, self.get_file_extension())
+    }
+
+    /// Fetch the image from the url, or grab it out of cache if it already exists
     pub async fn fetch_from_url(image_url: ImageUrlObject) -> Result<Self, ImageError> {
-        async fn fetch_bytes(url: &str) -> Result<Bytes, reqwest::Error> {
+        if let Ok(cached_image) = IMAGECACHE.find(&image_url.stem) {
+            return Ok(Self {
+                stem: image_url.stem,
+                format: cached_image.format,
+                data: FetchedImageType::Storage(cached_image),
+            });
+        }
+
+        async fn fetch_bytes(url: Url) -> Result<Bytes, reqwest::Error> {
             let image_result = reqwest::get(url).await?;
             let image_bytes = image_result.bytes().await?;
 
             Ok(image_bytes)
         }
 
-        match fetch_bytes(&image_url.url).await {
+        match fetch_bytes(image_url.url).await {
             Ok(bytes) => Ok(FetchedImage {
-                id: image_url.id,
-                bytes,
+                stem: image_url.stem,
+                data: FetchedImageType::Memory(bytes),
                 format: image_url.image_format,
             }),
             Err(err) => Err(ImageError::FetchError(err)),
@@ -211,63 +346,66 @@ impl FetchedImage {
 
 #[derive(Debug)]
 pub struct ImageUrlObject {
-    id: String,
-    url: String,
+    stem: String,
+    url: Url,
     image_format: ImageFormat,
 }
 
 impl ImageUrlObject {
-    pub fn from_url(url: String) -> Result<Self, ImageError> {
-        // Invalible error
-        let url_path = std::path::PathBuf::from_str(&url).unwrap();
-        let id = url_path
-            .file_stem()
-            .map_or(uuid::Uuid::new_v4().to_string(), |v| {
-                v.to_os_string()
-                    .into_string()
-                    .unwrap_or(uuid::Uuid::new_v4().to_string())
-            });
+    fn get_file_stem(url: &str) -> Result<String, ImageError> {
+        match std::path::PathBuf::from_str(url) {
+            Ok(path) => path
+                .file_name()
+                .and_then(|file_name| Some(file_name.to_string_lossy().into_owned()))
+                .ok_or(ImageError::InvalidUrl),
+            Err(_) => unreachable!(),
+        }
+    }
 
-        match ImageFormat::from_path(&url_path) {
-            Ok(image_format) => Ok(Self {
-                id,
-                url: url,
-                image_format,
-            }),
+    fn get_format(url: &str) -> Result<ImageFormat, ImageError> {
+        match ImageFormat::from_path(url) {
+            Ok(format) => Ok(format),
             Err(_err) => Err(ImageError::InvalidFormat),
         }
     }
-}
 
-pub struct ExternalImage<'a> {
-    path: &'a str,
-}
-
-impl<'a> ExternalImage<'a> {
-    async fn fetch_from_url(&self) -> Result<SavedImage, ImageError> {
-        let image_url = ImageUrlObject::from_url(self.path.to_owned())?;
-        let fetched_image = FetchedImage::fetch_from_url(image_url).await?;
-        fetched_image.cache()
+    fn get_url_object(url: &str) -> Result<Url, ImageError> {
+        Url::from_str(url).map_err(|_err| ImageError::InvalidUrl)
     }
 
-    pub fn new(path: &'a str) -> Self {
+    pub fn from_str(url: &str) -> Result<Self, ImageError> {
+        let stem = Self::get_file_stem(&url)?;
+        let image_format = Self::get_format(&url)?;
+        let url = Self::get_url_object(&url)?;
+
+        Ok(Self {
+            stem,
+            image_format,
+            url,
+        })
+    }
+}
+
+pub struct ExternalImage<P> {
+    path: P,
+}
+
+impl<P> ExternalImage<P>
+where
+    P: AsRef<str>,
+{
+    pub fn new(path: P) -> Self {
         Self { path }
     }
 
     pub async fn load(&self) -> Result<SavedImage, ImageError> {
-        match self.path {
-            url if url.starts_with("https://") || url.starts_with("http://") => {
-                self.fetch_from_url().await
+        match self.path.as_ref() {
+            url if Url::from_str(url).is_ok_and(|v| ["https", "http"].contains(&v.scheme())) => {
+                let image = FetchedImage::fetch_from_url(ImageUrlObject::from_str(url)?).await?;
+                IMAGECACHE.cache(&image)
             }
-            path if PathBuf::from_str(&path).is_ok_and(|v| v.is_file()) => {
-                let result = SavedImage::from_path(&path);
-
-                match result {
-                    Ok(image) => Ok(image),
-                    Err(_err) => Err(ImageError::NotFound),
-                }
-            }
-            _ => Err(ImageError::NotFound),
+            path if Path::new(path).is_file() => SavedImage::from_path(path),
+            _ => Err(ImageError::InvalidExternal),
         }
     }
 }

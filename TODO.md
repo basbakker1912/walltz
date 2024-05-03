@@ -1,7 +1,7 @@
 - [x]: A system for saving a current wallpaper to a collection
 - [x]: Read url suppliers from a TOML format instead of a supplier
 - [ ]: Global negative filters
-- [ ]: Code cleanup
+- [x]: Code cleanup
 - [ ]: Actual documentation
 - [ ]: Cleanup of the cache after a wallpaper hasn't been used for a week
 - [X]: Allow creation a git repository from a collection to save and sync it

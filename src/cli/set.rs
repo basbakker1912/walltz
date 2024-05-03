@@ -2,10 +2,11 @@ use std::{path::PathBuf, str::FromStr};
 
 use anyhow::bail;
 use clap::Args;
+use reqwest::Url;
 
 use crate::{
     collections::Collection,
-    image_supplier::{ExternalImage, SavedImage},
+    image_supplier::{ExternalImage, FetchedImage, ImageCache, ImageUrlObject, SavedImage},
     state::{ImageStateType, State},
 };
 
@@ -25,7 +26,7 @@ pub struct SetArgs {
 
 impl SetArgs {
     async fn fetch_image(name: &str) -> anyhow::Result<FetchImageResultData> {
-        let external_image = ExternalImage::new(&name).load().await;
+        let external_image = ExternalImage::new(name.to_owned()).load().await;
 
         if let Ok(image) = external_image {
             return Ok(FetchImageResultData::Image(image));

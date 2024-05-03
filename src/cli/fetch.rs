@@ -9,9 +9,9 @@ use crate::{
     category::Category,
     config::GlobalConfig,
     finder::{check_string_equality, find_best_by_value},
-    image_supplier::{FetchedImage, SearchParameters, UrlSupplier},
+    image_supplier::{FetchedImage, ImageCache, SearchParameters, UrlSupplier},
     state::State,
-    CONFIG,
+    CONFIG, IMAGECACHE,
 };
 
 #[derive(Args, Clone, Debug)]
@@ -140,7 +140,7 @@ impl FetchArgs {
 
             saved_image
         } else {
-            image.cache()?
+            IMAGECACHE.cache(&image)?
         };
 
         if self.assign {
