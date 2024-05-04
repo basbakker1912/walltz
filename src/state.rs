@@ -1,10 +1,10 @@
 use std::{io, path::PathBuf, str::Split};
 
-use crate::image_supplier::ImageError;
+use crate::image::ImageError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{collections::Collection, image_supplier::SavedImage, BASEDIRECTORIES, CONFIG};
+use crate::{collections::Collection, image::SavedImage, BASEDIRECTORIES, CONFIG};
 
 #[derive(Debug, Error)]
 pub enum StateError {

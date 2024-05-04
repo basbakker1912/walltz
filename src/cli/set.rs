@@ -6,7 +6,7 @@ use reqwest::Url;
 
 use crate::{
     collections::Collection,
-    image_supplier::{ExternalImage, FetchedImage, ImageCache, ImageUrlObject, SavedImage},
+    image::{ExternalImage, FetchedImage, ImageUrl, SavedImage},
     state::{ImageStateType, State},
 };
 

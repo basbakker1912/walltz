@@ -9,7 +9,7 @@ use image::ImageFormat;
 use rand::seq::IteratorRandom;
 use thiserror::Error;
 
-use crate::{image_supplier::SavedImage, BASEDIRECTORIES, CONFIG};
+use crate::{image::SavedImage, BASEDIRECTORIES, CONFIG};
 
 const GIT_REMOTE_NAME: &str = r#"origin"#;
 

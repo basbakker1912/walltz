@@ -1,8 +1,4 @@
-use crate::{
-    collections::Collection,
-    image_supplier::{ExternalImage, ImageCache},
-    state::State,
-};
+use crate::{collections::Collection, image::ExternalImage, state::State};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct SaveImageArgs {

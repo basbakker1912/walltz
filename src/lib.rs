@@ -1,9 +1,9 @@
 mod cli;
 pub mod config;
-pub mod image_supplier;
+pub mod image;
 pub use cli::Program;
 use config::GlobalConfig;
-use image_supplier::ImageCache;
+use image::cache::ImageCache;
 pub mod category;
 pub mod collections;
 pub mod finder;

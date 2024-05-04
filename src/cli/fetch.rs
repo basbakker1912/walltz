@@ -9,7 +9,7 @@ use crate::{
     category::Category,
     config::GlobalConfig,
     finder::{check_string_equality, find_best_by_value},
-    image_supplier::{FetchedImage, ImageCache, SearchParameters, UrlSupplier},
+    image::{FetchedImage, SearchParameters, UrlSupplier},
     state::State,
     CONFIG, IMAGECACHE,
 };

@@ -9,7 +9,8 @@ use std::{
 use bytes::Bytes;
 use image::ImageFormat;
 
-mod url_supplier;
+pub mod cache;
+pub mod url_supplier;
 
 use reqwest::Url;
 use thiserror::Error;
@@ -42,6 +43,7 @@ pub enum ImageError {
     InvalidExternal,
 }
 
+/// An image on disk
 pub struct SavedImage {
     path: PathBuf,
     format: ImageFormat,
@@ -121,103 +123,6 @@ impl SavedImage {
             }
             Ok(_) => Err(ImageError::IncompatibleFormat),
             Err(_) => Err(ImageError::InvalidFormat),
-        }
-    }
-}
-
-/// A image cache manager, does cleanup next to saving and retrieving images.
-pub struct ImageCache {
-    path: PathBuf,
-}
-
-impl ImageCache {
-    pub fn cleanup_cache(&self) -> Result<(), ImageError> {
-        let files = match self.path.read_dir() {
-            Ok(files) => files,
-            Err(err) => return Err(ImageError::FsError(err)),
-        };
-
-        fn should_cull(dir: std::fs::DirEntry) -> Option<PathBuf> {
-            let dir_path = dir.path();
-
-            let is_image = ImageFormat::from_path(&dir_path).is_ok();
-            if !is_image {
-                return None;
-            }
-
-            let last_modified = match dir.metadata().and_then(|metadata| metadata.modified()) {
-                Ok(modified) => modified,
-                Err(_) => return None,
-            };
-
-            let elapsed_since_modified = match last_modified.elapsed() {
-                Ok(elapsed) => elapsed,
-                Err(_) => return None,
-            };
-
-            // 7 days before deletion
-            // TODO: Make this a value in the config
-            const DELETION_THRESHOLD: Duration = Duration::from_secs(7 * 24 * 60 * 60);
-
-            if elapsed_since_modified > DELETION_THRESHOLD {
-                Some(dir_path)
-            } else {
-                None
-            }
-        }
-
-        for file_path in files.filter_map(|dir| dir.ok().and_then(should_cull)) {
-            match std::fs::remove_file(file_path) {
-                Ok(_) => {}
-                Err(err) => return Err(ImageError::FsError(err)),
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn open() -> Self {
-        let this = Self {
-            path: BASEDIRECTORIES.get_cache_home(),
-        };
-
-        this
-    }
-
-    pub fn find(&self, name: &str) -> Result<SavedImage, ImageError> {
-        let mut files = match self.path.read_dir() {
-            Ok(direntries) => direntries,
-            Err(err) => return Err(ImageError::FsError(err)),
-        };
-
-        let file = files.find_map(|direntry| match direntry {
-            Ok(direntry) => {
-                let file_path = direntry.path();
-                let stem = match file_path.file_stem() {
-                    Some(stem) => stem.to_string_lossy(),
-                    None => return None,
-                };
-
-                if stem == name {
-                    Some(file_path)
-                } else {
-                    None
-                }
-            }
-            Err(_) => None,
-        });
-
-        match file {
-            Some(file_path) => SavedImage::from_path(file_path),
-            None => Err(ImageError::NotFound),
-        }
-    }
-
-    pub fn cache(&self, image: &FetchedImage) -> Result<SavedImage, ImageError> {
-        let file_name = image.get_file_name();
-        match BASEDIRECTORIES.place_cache_file(file_name) {
-            Ok(file_path) => image.save(&file_path),
-            Err(err) => Err(ImageError::FsError(err)),
         }
     }
 }
@@ -317,7 +222,7 @@ impl FetchedImage {
     }
 
     /// Fetch the image from the url, or grab it out of cache if it already exists
-    pub async fn fetch_from_url(image_url: ImageUrlObject) -> Result<Self, ImageError> {
+    pub async fn fetch_from_url(image_url: ImageUrl) -> Result<Self, ImageError> {
         if let Ok(cached_image) = IMAGECACHE.find(&image_url.stem) {
             return Ok(Self {
                 stem: image_url.stem,
@@ -345,13 +250,13 @@ impl FetchedImage {
 }
 
 #[derive(Debug)]
-pub struct ImageUrlObject {
+pub struct ImageUrl {
     stem: String,
     url: Url,
     image_format: ImageFormat,
 }
 
-impl ImageUrlObject {
+impl ImageUrl {
     fn get_file_stem(url: &str) -> Result<String, ImageError> {
         match std::path::PathBuf::from_str(url) {
             Ok(path) => path
@@ -401,7 +306,7 @@ where
     pub async fn load(&self) -> Result<SavedImage, ImageError> {
         match self.path.as_ref() {
             url if Url::from_str(url).is_ok_and(|v| ["https", "http"].contains(&v.scheme())) => {
-                let image = FetchedImage::fetch_from_url(ImageUrlObject::from_str(url)?).await?;
+                let image = FetchedImage::fetch_from_url(ImageUrl::from_str(url)?).await?;
                 IMAGECACHE.cache(&image)
             }
             path if Path::new(path).is_file() => SavedImage::from_path(path),

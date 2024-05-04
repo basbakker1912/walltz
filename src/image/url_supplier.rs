@@ -7,7 +7,7 @@ use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{ImageUrlObject, SearchParameters};
+use super::{ImageUrl, SearchParameters};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
@@ -93,7 +93,7 @@ pub struct UrlSupplier {
 }
 
 impl UrlSupplier {
-    pub async fn search(self, parameters: SearchParameters) -> anyhow::Result<ImageUrlObject> {
+    pub async fn search(self, parameters: SearchParameters) -> anyhow::Result<ImageUrl> {
         let result = reqwest::Client::new()
             .get(self.base_url)
             .query(&[
@@ -188,7 +188,7 @@ impl UrlSupplier {
                         }
                     };
 
-                    ImageUrlObject {
+                    ImageUrl {
                         stem: image_id,
                         url: Url::from_str(&image_url)?,
                         image_format,
