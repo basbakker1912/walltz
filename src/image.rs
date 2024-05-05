@@ -13,14 +13,18 @@ pub mod cache;
 pub mod url_supplier;
 
 use reqwest::Url;
+use serde::Deserialize;
 use thiserror::Error;
 pub use url_supplier::UrlSupplier;
 
 use crate::{BASEDIRECTORIES, IMAGECACHE};
 
+#[derive(Debug, Clone, Deserialize)]
 pub struct SearchParameters {
     pub tags: Vec<String>,
     pub aspect_ratios: Vec<String>,
+    /// Wether to skip images found in cache, if possible
+    pub skip_cache: bool,
 }
 
 #[derive(Error, Debug)]
@@ -222,8 +226,9 @@ impl FetchedImage {
     }
 
     /// Fetch the image from the url, or grab it out of cache if it already exists
-    pub async fn fetch_from_url(image_url: ImageUrl) -> Result<Self, ImageError> {
+    pub fn fetch_from_url(image_url: ImageUrl) -> Result<Self, ImageError> {
         if let Ok(cached_image) = IMAGECACHE.find(&image_url.stem) {
+            println!("Fetching from cache");
             return Ok(Self {
                 stem: image_url.stem,
                 format: cached_image.format,
@@ -231,14 +236,14 @@ impl FetchedImage {
             });
         }
 
-        async fn fetch_bytes(url: Url) -> Result<Bytes, reqwest::Error> {
-            let image_result = reqwest::get(url).await?;
-            let image_bytes = image_result.bytes().await?;
+        fn fetch_bytes(url: Url) -> Result<Bytes, reqwest::Error> {
+            let image_result = reqwest::blocking::get(url)?;
+            let image_bytes = image_result.bytes()?;
 
             Ok(image_bytes)
         }
 
-        match fetch_bytes(image_url.url).await {
+        match fetch_bytes(image_url.url) {
             Ok(bytes) => Ok(FetchedImage {
                 stem: image_url.stem,
                 data: FetchedImageType::Memory(bytes),
@@ -303,10 +308,10 @@ where
         Self { path }
     }
 
-    pub async fn load(&self) -> Result<SavedImage, ImageError> {
+    pub fn load(&self) -> Result<SavedImage, ImageError> {
         match self.path.as_ref() {
             url if Url::from_str(url).is_ok_and(|v| ["https", "http"].contains(&v.scheme())) => {
-                let image = FetchedImage::fetch_from_url(ImageUrl::from_str(url)?).await?;
+                let image = FetchedImage::fetch_from_url(ImageUrl::from_str(url)?)?;
                 IMAGECACHE.cache(&image)
             }
             path if Path::new(path).is_file() => SavedImage::from_path(path),

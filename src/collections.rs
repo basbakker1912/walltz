@@ -4,9 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use git2::{Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository};
+use git2::{build::RepoBuilder, Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository};
 use image::ImageFormat;
 use rand::seq::IteratorRandom;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{image::SavedImage, BASEDIRECTORIES, CONFIG};
@@ -15,10 +16,12 @@ const GIT_REMOTE_NAME: &str = r#"origin"#;
 
 #[derive(Debug, Error)]
 pub enum CollectionError {
-    #[error("This already exists")]
-    AlreadyExists,
-    #[error("This cannot be found")]
-    NotFound,
+    #[error("The collection already exists")]
+    CollectionAlreadyExists,
+    #[error("The requested collection cannot be found")]
+    CollectionNotFound,
+    #[error("The requested image cannot be found")]
+    ImageNotFound,
     #[error("The name is invalid: {0}")]
     InvalidName(String),
     #[error("The collection does not have a git repository initialized")]
@@ -29,13 +32,38 @@ pub enum CollectionError {
     FsError(io::Error),
     #[error("There are not files to be found in the collection")]
     CollectionEmpty,
+    #[error("There is no storage location for collections, is the path occupied?")]
+    NoStorageLocation,
+    #[error("The collection repository could not be initialized: {0}")]
+    DecodeError(toml::de::Error),
+    #[error("The collection repository could not be saved: {0}")]
+    EncodeError(toml::ser::Error),
 }
 
+#[derive(Debug, Clone)]
 pub struct CollectionPath(PathBuf);
 
 impl CollectionPath {
-    pub fn from_name(name: &str) -> Self {
-        Self(BASEDIRECTORIES.get_data_home().join(&name))
+    fn get_storage_directory() -> PathBuf {
+        BASEDIRECTORIES.data_dir().join("collections")
+    }
+
+    // Get the collection path, creates it if it does not exists.
+    pub fn from_name(name: &str) -> Result<Self, CollectionError> {
+        let storage_drectory = Self::get_storage_directory();
+
+        if !storage_drectory.exists() {
+            match std::fs::DirBuilder::new().create(&storage_drectory) {
+                Ok(_) => {}
+                Err(err) => return Err(CollectionError::FsError(err)),
+            }
+        } else if !storage_drectory.is_dir() {
+            return Err(CollectionError::NoStorageLocation);
+        }
+
+        let collection_path = storage_drectory.join(name);
+
+        Ok(Self(collection_path))
     }
 
     pub fn exists(&self) -> bool {
@@ -43,11 +71,15 @@ impl CollectionPath {
     }
 
     pub fn create_directory(&self) -> Result<(), CollectionError> {
-        match std::fs::DirBuilder::new().create(&self) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                panic!("{:?}", err);
+        if !self.exists() {
+            match std::fs::DirBuilder::new().create(&self) {
+                Ok(_) => Ok(()),
+                Err(err) => {
+                    panic!("{:?}", err);
+                }
             }
+        } else {
+            Ok(())
         }
     }
 
@@ -79,7 +111,7 @@ impl AsRef<Path> for CollectionPath {
 pub struct CollectionRepository(Repository);
 
 impl CollectionRepository {
-    fn get_credential_callbacks(&self) -> RemoteCallbacks {
+    fn get_credential_callbacks<'a>() -> RemoteCallbacks<'a> {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
             Cred::ssh_key(
@@ -98,15 +130,15 @@ impl CollectionRepository {
         callbacks
     }
 
-    fn get_fetch_options(&self) -> FetchOptions {
+    fn get_fetch_options<'a>() -> FetchOptions<'a> {
         let mut options = FetchOptions::new();
-        options.remote_callbacks(self.get_credential_callbacks());
+        options.remote_callbacks(Self::get_credential_callbacks());
         options
     }
 
-    fn get_push_options(&self) -> PushOptions {
+    fn get_push_options<'a>() -> PushOptions<'a> {
         let mut options = PushOptions::new();
-        options.remote_callbacks(self.get_credential_callbacks());
+        options.remote_callbacks(Self::get_credential_callbacks());
         options
     }
 
@@ -165,6 +197,19 @@ impl CollectionRepository {
         }
     }
 
+    pub fn clone<P>(remote_url: &str, path: P) -> Result<Self, CollectionError>
+    where
+        P: AsRef<Path>,
+    {
+        let mut builder = RepoBuilder::new();
+        builder.fetch_options(Self::get_fetch_options());
+
+        match builder.clone(remote_url, path.as_ref()) {
+            Ok(repository) => Ok(CollectionRepository(repository)),
+            Err(err) => return Err(CollectionError::GitError(err)),
+        }
+    }
+
     pub fn commit_all(&self, message: &str) -> Result<(), CollectionError> {
         fn inner(repository: &Repository, message: &str) -> Result<(), git2::Error> {
             repository
@@ -208,7 +253,7 @@ impl CollectionRepository {
             Ok(())
         }
 
-        inner(&self.0, self.get_fetch_options(), self.get_push_options())
+        inner(&self.0, Self::get_fetch_options(), Self::get_push_options())
             .map_err(|err| CollectionError::GitError(err))
     }
 }
@@ -240,7 +285,7 @@ impl CollectionDirectory {
     fn create(name: &str, remote_url: Option<&str>) -> Result<Self, CollectionError> {
         Self::check_name(name)?;
 
-        let path = CollectionPath::from_name(name);
+        let path = CollectionPath::from_name(name)?;
         path.create_directory()?;
 
         let repository = match remote_url {
@@ -254,7 +299,8 @@ impl CollectionDirectory {
     fn open(name: &str) -> Result<Self, CollectionError> {
         Self::check_name(name)?;
 
-        let path = CollectionPath::from_name(name);
+        let path = CollectionPath::from_name(name)?;
+        path.create_directory()?;
 
         if path.exists() {
             let repository = match CollectionRepository::open(&path) {
@@ -265,7 +311,24 @@ impl CollectionDirectory {
 
             Ok(Self { path, repository })
         } else {
-            Err(CollectionError::NotFound)
+            Err(CollectionError::CollectionNotFound)
+        }
+    }
+
+    fn clone(remote_url: &str, name: &str) -> Result<Self, CollectionError> {
+        Self::check_name(name)?;
+
+        let path = CollectionPath::from_name(name)?;
+
+        if path.exists() {
+            Err(CollectionError::CollectionAlreadyExists)
+        } else {
+            let repository = match CollectionRepository::clone(remote_url, &path) {
+                Ok(repository) => Some(repository),
+                Err(err) => return Err(err),
+            };
+
+            Ok(Self { path, repository })
         }
     }
 
@@ -341,7 +404,7 @@ impl CollectionDirectory {
 
         match image {
             Some(image) => Ok(image),
-            None => Err(CollectionError::NotFound),
+            None => Err(CollectionError::ImageNotFound),
         }
     }
 
@@ -379,6 +442,15 @@ impl Collection {
         let directory = CollectionDirectory::open(&name)?;
 
         Ok(Self { name, directory })
+    }
+
+    pub fn clone(remote_url: &str, name: &str) -> Result<Self, CollectionError> {
+        let directory = CollectionDirectory::clone(remote_url, name)?;
+
+        Ok(Self {
+            name: name.to_string(),
+            directory,
+        })
     }
 
     pub fn delete(self) -> Result<(), CollectionError> {

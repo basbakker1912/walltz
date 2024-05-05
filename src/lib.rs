@@ -10,10 +10,10 @@ pub mod finder;
 pub mod state;
 
 lazy_static::lazy_static! {
-    pub static ref BASEDIRECTORIES: xdg::BaseDirectories = xdg::BaseDirectories::with_prefix(env!("CARGO_PKG_NAME")).expect("Failed to get base directories, is XDG installed?");
+    pub static ref BASEDIRECTORIES: directories::ProjectDirs = directories::ProjectDirs::from("", "", env!("CARGO_PKG_NAME")).expect("Failed to get project directories");
     pub static ref CONFIG: GlobalConfig = GlobalConfig::read().expect("Failed to open config.");
     pub static ref IMAGECACHE: ImageCache = {
-        let cache = ImageCache::open();
+        let cache = ImageCache;
         match cache.cleanup_cache() {
             Ok(_) => {},
             Err(err) => println!("Failed to clean the cache: {:?}", err)

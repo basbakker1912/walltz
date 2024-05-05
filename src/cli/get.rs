@@ -6,7 +6,7 @@ use crate::state::State;
 pub struct GetArgs {}
 
 impl GetArgs {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let state = State::open()?;
         let image_path = state.get_current_image()?.get_absolute_path()?;
         println!("{}", image_path.to_string_lossy());

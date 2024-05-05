@@ -10,7 +10,7 @@ pub struct SyncArgs {
 }
 
 impl SyncArgs {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let mut collection = Collection::open(&self.name)?;
 
         let repository = if let Some(repository) = collection.get_repository() {

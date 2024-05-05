@@ -18,7 +18,7 @@ pub enum StateError {
     NoImageSet,
 }
 
-lazy_static::lazy_static! { static ref STATE_FILE: PathBuf = BASEDIRECTORIES.place_data_file("state.toml").expect("Failed to get state file."); }
+lazy_static::lazy_static! { static ref STATE_FILE: PathBuf = BASEDIRECTORIES.data_dir().join("state.toml"); }
 
 struct SetImageCommand<'a> {
     program: &'a str,

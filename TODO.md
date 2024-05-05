@@ -3,6 +3,6 @@
 - [ ]: Global negative filters
 - [x]: Code cleanup
 - [ ]: Actual documentation
-- [ ]: Cleanup of the cache after a wallpaper hasn't been used for a week
+- [x]: Cleanup of the cache after a wallpaper hasn't been used for a week
 - [X]: Allow creation a git repository from a collection to save and sync it
 - [ ]: Allow cloning a git repository

@@ -12,7 +12,7 @@ pub struct DeleteArgs {
 }
 
 impl DeleteArgs {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let collection = Collection::open(&self.name)?;
 
         if !self.force {

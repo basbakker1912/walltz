@@ -37,7 +37,7 @@ pub struct FetchArgs {
 }
 
 impl FetchArgs {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let category = {
             match self.category {
                 Some(category_name) => Some(Category::find_in_config(&category_name)?),
@@ -54,11 +54,13 @@ impl FetchArgs {
                         .chain(category.tags.into_iter())
                         .collect(),
                     aspect_ratios: category.aspect_ratios,
+                    skip_cache: true,
                 },
                 // TODO: Add aspect ratio arg in cli
                 None => SearchParameters {
                     tags: self.tags,
                     aspect_ratios: CONFIG.aspect_ratios.clone(),
+                    skip_cache: true,
                 },
             }
         };
@@ -112,15 +114,15 @@ impl FetchArgs {
                 }
             }
         };
-        let search_result = url_supplier.search(parameters).await?;
+        let search_result = url_supplier.search(parameters)?;
 
         let image = if self.simple {
-            FetchedImage::fetch_from_url(search_result).await?
+            FetchedImage::fetch_from_url(search_result)?
         } else {
             let pb = ProgressBar::new_spinner();
             pb.enable_steady_tick(Duration::from_millis(120));
             pb.set_message("Downloading...");
-            let image = FetchedImage::fetch_from_url(search_result).await?;
+            let image = FetchedImage::fetch_from_url(search_result)?;
             pb.finish_with_message("Downloaded");
 
             image

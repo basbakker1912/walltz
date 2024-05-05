@@ -1,4 +1,7 @@
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use image::ImageFormat;
 
@@ -7,13 +10,11 @@ use crate::BASEDIRECTORIES;
 use super::{FetchedImage, ImageError, SavedImage};
 
 /// A image cache manager, does cleanup next to saving and retrieving images.
-pub struct ImageCache {
-    path: PathBuf,
-}
+pub struct ImageCache;
 
 impl ImageCache {
     pub fn cleanup_cache(&self) -> Result<(), ImageError> {
-        let files = match self.path.read_dir() {
+        let files = match self.get_path().read_dir() {
             Ok(files) => files,
             Err(err) => return Err(ImageError::FsError(err)),
         };
@@ -57,16 +58,12 @@ impl ImageCache {
         Ok(())
     }
 
-    pub fn open() -> Self {
-        let this = Self {
-            path: BASEDIRECTORIES.get_cache_home(),
-        };
-
-        this
+    pub fn get_path<'a>(&self) -> &'a Path {
+        BASEDIRECTORIES.cache_dir()
     }
 
     pub fn find(&self, name: &str) -> Result<SavedImage, ImageError> {
-        let mut files = match self.path.read_dir() {
+        let mut files = match self.get_path().read_dir() {
             Ok(direntries) => direntries,
             Err(err) => return Err(ImageError::FsError(err)),
         };
@@ -96,9 +93,7 @@ impl ImageCache {
 
     pub fn cache(&self, image: &FetchedImage) -> Result<SavedImage, ImageError> {
         let file_name = image.get_file_name();
-        match BASEDIRECTORIES.place_cache_file(file_name) {
-            Ok(file_path) => image.save(&file_path),
-            Err(err) => Err(ImageError::FsError(err)),
-        }
+        let file_path = self.get_path().join(file_name);
+        image.save(&file_path)
     }
 }

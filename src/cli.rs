@@ -32,14 +32,14 @@ enum Commands {
 pub struct Program;
 
 impl Program {
-    pub async fn init() -> ExitCode {
+    pub fn init() -> ExitCode {
         let cli = Cli::parse();
 
         let result = match cli.commands {
-            Commands::Fetch(args) => args.run().await,
-            Commands::Collections { commands } => commands.run().await,
-            Commands::Get(args) => args.run().await,
-            Commands::Set(args) => args.run().await,
+            Commands::Fetch(args) => args.run(),
+            Commands::Collections { commands } => commands.run(),
+            Commands::Get(args) => args.run(),
+            Commands::Set(args) => args.run(),
         };
 
         match result {

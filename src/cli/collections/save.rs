@@ -9,13 +9,13 @@ pub struct SaveImageArgs {
 }
 
 impl SaveImageArgs {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let collection = Collection::open(&self.collection)?;
 
         let state = State::open()?;
 
         let image = match self.which {
-            Some(path) => ExternalImage::new(&path).load().await?,
+            Some(path) => ExternalImage::new(&path).load()?,
             None => state.get_current_image()?,
         };
 

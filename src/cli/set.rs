@@ -25,8 +25,8 @@ pub struct SetArgs {
 }
 
 impl SetArgs {
-    async fn fetch_image(name: &str) -> anyhow::Result<FetchImageResultData> {
-        let external_image = ExternalImage::new(name.to_owned()).load().await;
+    fn fetch_image(name: &str) -> anyhow::Result<FetchImageResultData> {
+        let external_image = ExternalImage::new(name.to_owned()).load();
 
         if let Ok(image) = external_image {
             return Ok(FetchImageResultData::Image(image));
@@ -45,7 +45,7 @@ impl SetArgs {
         bail!("The name: {} is not a valid url, path or collection", name);
     }
 
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         let mut state = State::open()?;
 
         if self.reapply {
@@ -77,7 +77,7 @@ impl SetArgs {
         }
 
         if let Some(name) = self.name {
-            let image = Self::fetch_image(&name).await?;
+            let image = Self::fetch_image(&name)?;
 
             let image_path = match image {
                 FetchImageResultData::Image(image) => {

@@ -15,13 +15,13 @@ pub enum CollectionCommands {
 }
 
 impl CollectionCommands {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         match self {
-            CollectionCommands::Create(args) => args.run().await,
-            CollectionCommands::Delete(args) => args.run().await,
-            CollectionCommands::Save(args) => args.run().await,
-            CollectionCommands::From(args) => args.run().await,
-            CollectionCommands::Sync(args) => args.run().await,
+            CollectionCommands::Create(args) => args.run(),
+            CollectionCommands::Delete(args) => args.run(),
+            CollectionCommands::Save(args) => args.run(),
+            CollectionCommands::From(args) => args.run(),
+            CollectionCommands::Sync(args) => args.run(),
         }
     }
 }

@@ -1,4 +1,7 @@
-use std::{io::Read, path::PathBuf};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -30,12 +33,12 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub fn get_config_path() -> PathBuf {
-        BASEDIRECTORIES.get_config_home()
+    pub fn get_config_path<'a>() -> &'a Path {
+        BASEDIRECTORIES.config_dir()
     }
 
     pub fn read() -> anyhow::Result<Self> {
-        let config_path = BASEDIRECTORIES.place_config_file("config.toml")?;
+        let config_path = Self::get_config_path().join("config.toml");
 
         let settings = std::fs::File::open(config_path);
 

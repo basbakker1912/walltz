@@ -11,7 +11,7 @@ pub struct CreateCollectionArgs {
 }
 
 impl CreateCollectionArgs {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         if self.git {
             let check_regex = Regex::new(
                 r#"((git|ssh|http(s)?)|(git@[\w\.]+))(:(//)?)([\w\.@\:/\-~]+)(\.git)(/)?"#,
