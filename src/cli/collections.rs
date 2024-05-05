@@ -1,6 +1,7 @@
 mod create;
 mod delete;
 mod from;
+mod list;
 mod save;
 mod sync;
 
@@ -9,9 +10,9 @@ pub enum CollectionCommands {
     Create(create::CreateCollectionArgs),
     Delete(delete::DeleteArgs),
     Save(save::SaveImageArgs),
-    // From Remote Command
     From(from::FromArgs),
     Sync(sync::SyncArgs),
+    List(list::ListArgs),
 }
 
 impl CollectionCommands {
@@ -22,6 +23,7 @@ impl CollectionCommands {
             CollectionCommands::Save(args) => args.run(),
             CollectionCommands::From(args) => args.run(),
             CollectionCommands::Sync(args) => args.run(),
+            CollectionCommands::List(args) => args.run(),
         }
     }
 }

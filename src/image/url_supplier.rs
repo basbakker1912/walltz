@@ -54,20 +54,20 @@ struct JsonResponseDecoder {
 impl JsonResponseDecoder {
     fn decode_entry(&self, entry: serde_json::Value) -> anyhow::Result<ImageUrl> {
         if let serde_json::Value::Object(object) = entry {
-            let image_id = match &self.id {
+            let image_stem = match &self.id {
                 ImageId::Random => rand::thread_rng().gen::<u32>().to_string(),
                 ImageId::Key { key } => {
-                    let image_id = object
+                    let image_stem = object
                         .get(key)
                         .ok_or(anyhow!("No value for key: {}", key))?;
 
-                    match image_id {
+                    match image_stem {
                         Value::String(value) => value.clone(),
                         Value::Number(value) => value.to_string(),
                         _ => bail!(
                             "Key for id: {} not of type: String or Number, but of type: {:?}",
                             key,
-                            image_id
+                            image_stem
                         ),
                     }
                 }
@@ -112,7 +112,7 @@ impl JsonResponseDecoder {
             };
 
             Ok(ImageUrl {
-                stem: image_id,
+                stem: image_stem,
                 url: Url::from_str(&image_url)?,
                 image_format,
             })

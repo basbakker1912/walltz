@@ -2,6 +2,7 @@ use std::{
     fs::DirEntry,
     io,
     path::{Path, PathBuf},
+    vec,
 };
 
 use git2::{build::RepoBuilder, Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository};
@@ -451,6 +452,32 @@ impl Collection {
             name: name.to_string(),
             directory,
         })
+    }
+
+    pub fn list() -> Result<Vec<String>, CollectionError> {
+        let storage_drectory = CollectionPath::get_storage_directory();
+
+        if !storage_drectory.exists() {
+            return Ok(vec![]);
+        }
+
+        let files = match storage_drectory.read_dir() {
+            Ok(files) => files,
+            Err(err) => return Err(CollectionError::FsError(err)),
+        }
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry),
+            Err(_) => None,
+        })
+        .filter_map(|entry| match entry.path() {
+            path if path.is_dir() => match path.file_stem() {
+                Some(stem) => Some(stem.to_string_lossy().into_owned()),
+                None => None,
+            },
+            _ => None,
+        });
+
+        Ok(files.collect())
     }
 
     pub fn delete(self) -> Result<(), CollectionError> {

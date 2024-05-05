@@ -265,7 +265,7 @@ impl ImageUrl {
     fn get_file_stem(url: &str) -> Result<String, ImageError> {
         match std::path::PathBuf::from_str(url) {
             Ok(path) => path
-                .file_name()
+                .file_stem()
                 .and_then(|file_name| Some(file_name.to_string_lossy().into_owned()))
                 .ok_or(ImageError::InvalidUrl),
             Err(_) => unreachable!(),
